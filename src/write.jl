@@ -16,11 +16,11 @@ function write_vtk(
     basename::String,
     it::Int,
     time::Real,
-    mesh::AbstractMesh{topoDim, spaceDim},
-    vars::Dict{String, Tuple{V, L}};
-    append = false,
-) where {topoDim, spaceDim, V, L <: WriteVTK.AbstractFieldData}
-    pvd = paraview_collection(basename; append = append)
+    mesh::AbstractMesh{topoDim,spaceDim},
+    vars::Dict{String,Tuple{V,L}};
+    append=false,
+) where {topoDim,spaceDim,V,L<:WriteVTK.AbstractFieldData}
+    pvd = paraview_collection(basename; append=append)
 
     # Create coordinates arrays
     vtknodes = reshape(
@@ -47,93 +47,16 @@ function write_vtk(
     vtk_save(pvd) # also triggers `vtk_save(vtkfile)`
 end
 
-"""
-VTK writer for a set of discontinuous functions. `vars` is a dictionnary of
-variable name => (values, values_location)
-
-where values is an array of numbers.
-"""
-function write_vtk_discontinuous(
-    basename::String,
-    it::Int,
-    time::Real,
-    mesh::AbstractMesh{topoDim, spaceDim},
-    vars::Dict{String, Tuple{V, L}},
-    degree::Int;
-    append = false,
-) where {topoDim, spaceDim, V, L <: WriteVTK.AbstractFieldData}
-    pvd = paraview_collection(basename; append = append)
-
-    # Connectivity
-    c2n = connectivities_indices(mesh, :c2n)
-
-    celltypes = cells(mesh)
-
-    _degree = max(1, degree)
-    fs = FunctionSpace(:Lagrange, max(1, degree)) # here, we implicitly impose that the mesh is composed of Lagrange elements only
-
-    # Create coordinates arrays
-    # vtknodes = reshape([get_coords(n)[idim] for i in 1:ncells(mesh) for n in get_nodes(mesh,c2n[i]) for idim in 1:spaceDim],spaceDim,:)
-    _coords = [
-        mapping(celltypes[i], get_nodes(mesh, c2n[i]), ξ)[idim] for i in 1:ncells(mesh)
-        for ξ in _vtk_coords_from_lagrange(shape(celltypes[i]), _degree) for
-        idim in 1:spaceDim
-    ]
-    vtknodes = reshape(_coords, spaceDim, :)
-
-    # Create cell array
-    vtkcells = MeshCell[]
-    count = 0
-    for icell in 1:ncells(mesh)
-        _nnode = get_ndofs(fs, shape(celltypes[icell]))
-        push!(
-            vtkcells,
-            MeshCell(
-                vtk_entity(shape(cells(mesh)[icell]), Val(_degree)),
-                collect((count + 1):(count + _nnode)),
-            ),
-        )
-        count += _nnode
-    end
-
-    _index_val = [
-        _vtk_lagrange_node_index_vtk_to_bcube(shape(celltypes[i]), _degree) for
-        i in 1:ncells(mesh)
-    ]
-    index_val = similar(rawcat(_index_val))
-    offset = 0
-    for ind in _index_val
-        index_val[(offset + 1):(offset + length(ind))] .= (offset .+ ind)
-        offset += length(ind)
-    end
-
-    # Define mesh for vtk
-    #vtk_save(paraview_collection(basename))
-    new_name = _build_fname_with_iterations(basename, it)
-    vtkfile = vtk_grid(new_name, vtknodes, vtkcells)
-
-    for (varname, (value, loc)) in vars
-        if isa(loc, VTKPointData)
-            vtkfile[varname, loc] = value[index_val]
-        else
-            vtkfile[varname, loc] = value
-        end
-    end
-
-    pvd[float(time)] = vtkfile
-    vtk_save(pvd)
-end
-
 function write_vtk_bnd_discontinuous(
     basename::String,
     it::Int,
     time::Real,
     domain::BoundaryFaceDomain,
-    vars::Dict{String, Tuple{V, L}},
+    vars::Dict{String,Tuple{V,L}},
     degree::Int;
-    append = false,
-) where {V, L <: WriteVTK.AbstractFieldData}
-    pvd = paraview_collection(basename; append = append)
+    append=false,
+) where {V,L<:WriteVTK.AbstractFieldData}
+    pvd = paraview_collection(basename; append=append)
 
     mesh = get_mesh(domain)
     sdim = spacedim(mesh)
@@ -167,7 +90,7 @@ function write_vtk_bnd_discontinuous(
     count = 0
     for ftype in ftypes
         _nnode = get_ndofs(fs, shape(ftype))
-        push!(vtkcells, MeshCell(vtk_entity(ftype), collect((count + 1):(count + _nnode))))
+        push!(vtkcells, MeshCell(vtk_entity(ftype), collect((count+1):(count+_nnode))))
         count += _nnode
     end
 
@@ -195,9 +118,9 @@ write_vtk("output", basic_mesh())
 """
 function write_vtk(
     basename::String,
-    mesh::AbstractMesh{topoDim, spaceDim},
-) where {topoDim, spaceDim}
-    dict_vars = Dict{String, Tuple{Any, WriteVTK.AbstractFieldData}}()
+    mesh::AbstractMesh{topoDim,spaceDim},
+) where {topoDim,spaceDim}
+    dict_vars = Dict{String,Tuple{Any,WriteVTK.AbstractFieldData}}()
     write_vtk(basename, 1, 0.0, mesh, dict_vars)
 end
 
@@ -212,24 +135,24 @@ function vtk_entity(t::AbstractEntityType)
 end
 
 vtk_entity(::Node_t) = VTKCellTypes.VTK_VERTEX
-vtk_entity(::Bar2_t) = VTKCellTypes.VTK_LINE
-vtk_entity(::Bar3_t) = VTKCellTypes.VTK_LAGRANGE_CURVE
-vtk_entity(::Bar4_t) = VTKCellTypes.VTK_LAGRANGE_CURVE
+vtk_entity(::Bcube.Bar2_t) = VTKCellTypes.VTK_LINE
+vtk_entity(::Bcube.Bar3_t) = VTKCellTypes.VTK_LAGRANGE_CURVE
+vtk_entity(::Bcube.Bar4_t) = VTKCellTypes.VTK_LAGRANGE_CURVE
 #vtk_entity(::Bar5_t)    = error("undefined")
-vtk_entity(::Tri3_t) = VTKCellTypes.VTK_TRIANGLE
-vtk_entity(::Tri6_t) = VTKCellTypes.VTK_LAGRANGE_TRIANGLE #VTK_QUADRATIC_TRIANGLE
-vtk_entity(::Tri9_t) = error("undefined")
-vtk_entity(::Tri10_t) = VTKCellTypes.VTK_LAGRANGE_TRIANGLE
+vtk_entity(::Bcube.Tri3_t) = VTKCellTypes.VTK_TRIANGLE
+vtk_entity(::Bcube.Tri6_t) = VTKCellTypes.VTK_LAGRANGE_TRIANGLE #VTK_QUADRATIC_TRIANGLE
+vtk_entity(::Bcube.Tri9_t) = error("undefined")
+vtk_entity(::Bcube.Tri10_t) = VTKCellTypes.VTK_LAGRANGE_TRIANGLE
 #vtk_entity(::Tri12_t)   = error("undefined")
-vtk_entity(::Quad4_t) = VTKCellTypes.VTK_QUAD
-vtk_entity(::Quad8_t) = VTKCellTypes.VTK_QUADRATIC_QUAD
-vtk_entity(::Quad9_t) = VTKCellTypes.VTK_BIQUADRATIC_QUAD
-vtk_entity(::Quad16_t) = VTKCellTypes.VTK_LAGRANGE_QUADRILATERAL
-vtk_entity(::Tetra4_t) = VTKCellTypes.VTK_TETRA
-vtk_entity(::Tetra10_t) = VTKCellTypes.VTK_QUADRATIC_TETRA
-vtk_entity(::Penta6_t) = VTKCellTypes.VTK_WEDGE
-vtk_entity(::Hexa8_t) = VTKCellTypes.VTK_HEXAHEDRON
-vtk_entity(::Pyra5_t) = VTKCellTypes.VTK_PYRAMID
+vtk_entity(::Bcube.Quad4_t) = VTKCellTypes.VTK_QUAD
+vtk_entity(::Bcube.Quad8_t) = VTKCellTypes.VTK_QUADRATIC_QUAD
+vtk_entity(::Bcube.Quad9_t) = VTKCellTypes.VTK_BIQUADRATIC_QUAD
+vtk_entity(::Bcube.Quad16_t) = VTKCellTypes.VTK_LAGRANGE_QUADRILATERAL
+vtk_entity(::Bcube.Tetra4_t) = VTKCellTypes.VTK_TETRA
+vtk_entity(::Bcube.Tetra10_t) = VTKCellTypes.VTK_QUADRATIC_TETRA
+vtk_entity(::Bcube.Penta6_t) = VTKCellTypes.VTK_WEDGE
+vtk_entity(::Bcube.Hexa8_t) = VTKCellTypes.VTK_HEXAHEDRON
+vtk_entity(::Bcube.Pyra5_t) = VTKCellTypes.VTK_PYRAMID
 #vtk_entity(::Hexa27_t) = VTK_TRIQUADRATIC_HEXAHEDRON # NEED TO CHECK NODE NUMBERING : https://vtk.org/doc/nightly/html/classvtkTriQuadraticHexahedron.html
 
 vtk_entity(::Line, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_CURVE
@@ -283,7 +206,7 @@ end
 """
 Bcube node numbering -> VTK node numbering (in a cell)
 """
-function _vtk_lagrange_node_index_bcube_to_vtk(shape::Union{Square, Cube}, degree)
+function _vtk_lagrange_node_index_bcube_to_vtk(shape::Union{Square,Cube}, degree)
     n = _get_num_nodes_per_dim(
         QuadratureRule(shape, Quadrature(QuadratureUniform(), Val(degree))),
     )
@@ -302,7 +225,7 @@ end
 """
 VTK node numbering (in a cell) -> Bcube node numbering
 """
-function _vtk_lagrange_node_index_vtk_to_bcube(shape::Union{Square, Cube}, degree)
+function _vtk_lagrange_node_index_vtk_to_bcube(shape::Union{Square,Cube}, degree)
     return invperm(_vtk_lagrange_node_index_bcube_to_vtk(shape, degree))
 end
 
@@ -313,7 +236,7 @@ end
 """
 Coordinates of the nodes in the VTK cell, ordered as expected by VTK.
 """
-function _vtk_coords_from_lagrange(shape::Union{Square, Cube}, degree)
+function _vtk_coords_from_lagrange(shape::Union{Square,Cube}, degree)
     fs = FunctionSpace(Lagrange(), degree)
     c = get_coords(fs, shape)
     index = _vtk_lagrange_node_index_vtk_to_bcube(shape, degree)
@@ -351,35 +274,6 @@ indicate if the node values should be discontinuous or not.
 
 `vars` is a dictionnary of variable name => Union{FEFunction,MeshCellData,CellFunction} to write.
 
-Cell-centered data should be wrapped as `MeshCellData` in the `vars` dict. To convert an `AbstractLazy` to
-a `MeshCellData`, simply use `Bcube.cell_mean` or `MeshCellData ∘ Bcube.var_on_centers`.
-
-# Remarks:
-* If `mesh` is of degree `d`, the solution will be written on a mesh of degree `mesh_degree`, even if this
-number is different from `d`.
-* The degree of the input FEFunction (P1, P2, P3, ...) is not used to define the nodes where the solution is
-written, only `mesh` and `mesh_degree` matter. The FEFunction is simply evaluated on the aforementionned nodes.
-
-# Example
-```julia
-mesh = rectangle_mesh(6, 7; xmin = -1, xmax = 1.0, ymin = -1, ymax = 1.0)
-f_u = PhysicalFunction(x -> x[1]^2 + x[2]^2)
-u = FEFunction(TrialFESpace(FunctionSpace(:Lagrange, 4), mesh))
-projection_l2!(u, f_u, mesh)
-
-vars = Dict("f_u" => f_u, "u" => u, "grad_u" => ∇(u))
-
-for mesh_degree in 1:5
-    Bcube.write_vtk_lagrange(
-        joinpath(@__DIR__, "output"),
-        vars,
-        mesh;
-        mesh_degree,
-        discontinuous = false
-    )
-end
-```
-
 # Dev notes
 - in order to write an ASCII file, you must pass both `ascii = true` and `append = false`
 - `collection_append` is not named `append` to enable passing correct `kwargs` to `vtk_grid`
@@ -387,20 +281,20 @@ end
 """
 function write_vtk_lagrange(
     basename::String,
-    vars::Dict{String, F},
+    vars::Dict{String,F},
     mesh::AbstractMesh,
-    it::Integer = -1,
-    time::Real = 0.0;
-    mesh_degree::Integer = 1,
-    discontinuous::Bool = true,
-    functionSpaceType::AbstractFunctionSpaceType = Lagrange(),
-    collection_append::Bool = false,
+    it::Integer=-1,
+    time::Real=0.0;
+    mesh_degree::Integer=1,
+    discontinuous::Bool=true,
+    functionSpaceType::AbstractFunctionSpaceType=Lagrange(),
+    collection_append::Bool=false,
     vtk_kwargs...,
-) where {F <: AbstractLazy}
+) where {F<:AbstractLazy}
     U_export = TrialFESpace(
         FunctionSpace(functionSpaceType, mesh_degree),
         mesh;
-        isContinuous = !discontinuous,
+        isContinuous=!discontinuous,
     )
     write_vtk_lagrange(
         basename,
@@ -416,14 +310,14 @@ end
 
 function write_vtk_lagrange(
     basename::String,
-    vars::Dict{String, F},
+    vars::Dict{String,F},
     mesh::AbstractMesh,
     U_export::AbstractFESpace,
-    it::Integer = -1,
-    time::Real = 0.0;
-    collection_append = false,
+    it::Integer=-1,
+    time::Real=0.0;
+    collection_append=false,
     vtk_kwargs...,
-) where {F <: AbstractLazy}
+) where {F<:AbstractLazy}
     # FE space stuff
     fs_export = get_function_space(U_export)
     @assert get_type(fs_export) <: Lagrange "Only FunctionSpace of type Lagrange are supported for now"
@@ -458,7 +352,7 @@ function write_vtk_lagrange(
         coords_bcube = get_coords(fs_export, _shape)
 
         # Get VTK <-> BCUBE dofs/nodes mapping
-        v2b = Bcube._vtk_lagrange_node_index_vtk_to_bcube(_shape, degree_export)
+        v2b = _vtk_lagrange_node_index_vtk_to_bcube(_shape, degree_export)
 
         # Add nodes coordinates to coords_vtk
         for (iloc, ξ) in enumerate(coords_bcube)
@@ -474,8 +368,8 @@ function write_vtk_lagrange(
 
             # Evaluate all vars on this node
             for (ivar, var) in enumerate(values(vars_point))
-                _var = materialize(var, cinfo)
-                values_vtk[ivar][:, iglob] .+= materialize(_var, cpoint)
+                _var = Bcube.materialize(var, cinfo)
+                values_vtk[ivar][:, iglob] .+= Bcube.materialize(_var, cpoint)
             end
         end
 
@@ -507,7 +401,7 @@ function write_vtk_lagrange(
     end
 
     # Write VTK file
-    pvd = paraview_collection(basename; append = collection_append)
+    pvd = paraview_collection(basename; append=collection_append)
     new_name = _build_fname_with_iterations(basename, it)
     vtkfile = vtk_grid(new_name, coords_vtk, cells_vtk; vtk_kwargs...)
 
@@ -530,14 +424,14 @@ function _build_fname_with_iterations(basename::String, it::Integer)
 end
 
 function Bcube.write_file(
-    ::Bcube.VTKIoHandler,
+    ::VTKIoHandler,
     filepath::String,
     mesh::AbstractMesh,
     U_export::AbstractFESpace,
-    data = nothing,
-    it::Integer = -1,
-    time::Real = 0.0;
-    collection_append = false,
+    data=nothing,
+    it::Integer=-1,
+    time::Real=0.0;
+    collection_append=false,
     kwargs...,
 )
 

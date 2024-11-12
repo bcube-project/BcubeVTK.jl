@@ -51,7 +51,7 @@
         # add var MeshCellData :
         quad = Quadrature(4)
         dΩ = Measure(CellDomain(mesh), quad)
-        vars["umean"] = Bcube.cell_mean(u, dΩ)
+        vars["umean"] = cell_mean(u, dΩ)
         basename = "write_vtk_lagrange_deg4_with_mean"
         write_vtk_lagrange(
             joinpath(tempdir, basename),

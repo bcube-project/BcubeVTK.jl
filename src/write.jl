@@ -69,21 +69,21 @@ function write_vtk_bnd_discontinuous(
     # Cell and face types
     celltypes = cells(mesh)
 
-    bndfaces = get_cache(domain)
+    bndfaces = Bcube.get_cache(domain)
 
     fs = FunctionSpace(:Lagrange, max(1, degree)) # here, we implicitly impose that the mesh is composed of Lagrange elements only
 
     a = map(bndfaces) do iface
         icell = f2c[iface][1]
-        sideᵢ = cell_side(celltypes[icell], c2n[icell], f2n[iface])
-        localfacedofs = idof_by_face_with_bounds(fs, shape(celltypes[icell]))[sideᵢ]
+        sideᵢ = Bcube.cell_side(celltypes[icell], c2n[icell], f2n[iface])
+        localfacedofs = Bcube.idof_by_face_with_bounds(fs, shape(celltypes[icell]))[sideᵢ]
         ξ = get_coords(fs, shape(celltypes[icell]))[localfacedofs]
-        xdofs = map(_ξ -> mapping(celltypes[icell], get_nodes(mesh, c2n[icell]), _ξ), ξ)
-        ftype = entity(face_shapes(shape(celltypes[icell]), sideᵢ), Val(degree))
-        ftype, rawcat(xdofs)
+        xdofs = map(_ξ -> Bcube.mapping(celltypes[icell], get_nodes(mesh, c2n[icell]), _ξ), ξ)
+        ftype = Bcube.entity(Bcube.face_shapes(shape(celltypes[icell]), sideᵢ), Val(degree))
+        ftype, Bcube.rawcat(xdofs)
     end
     ftypes = getindex.(a, 1)
-    vtknodes = reshape(rawcat(getindex.(a, 2)), sdim, :)
+    vtknodes = reshape(Bcube.rawcat(getindex.(a, 2)), sdim, :)
 
     # Create elements array
     vtkcells = MeshCell[]

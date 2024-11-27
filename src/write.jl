@@ -16,11 +16,11 @@ function write_vtk(
     basename::String,
     it::Int,
     time::Real,
-    mesh::AbstractMesh{topoDim,spaceDim},
-    vars::Dict{String,Tuple{V,L}};
-    append=false,
-) where {topoDim,spaceDim,V,L<:WriteVTK.AbstractFieldData}
-    pvd = paraview_collection(basename; append=append)
+    mesh::AbstractMesh{topoDim, spaceDim},
+    vars::Dict{String, Tuple{V, L}};
+    append = false,
+) where {topoDim, spaceDim, V, L <: WriteVTK.AbstractFieldData}
+    pvd = paraview_collection(basename; append = append)
 
     # Create coordinates arrays
     vtknodes = reshape(
@@ -52,11 +52,11 @@ function write_vtk_bnd_discontinuous(
     it::Int,
     time::Real,
     domain::BoundaryFaceDomain,
-    vars::Dict{String,Tuple{V,L}},
+    vars::Dict{String, Tuple{V, L}},
     degree::Int;
-    append=false,
-) where {V,L<:WriteVTK.AbstractFieldData}
-    pvd = paraview_collection(basename; append=append)
+    append = false,
+) where {V, L <: WriteVTK.AbstractFieldData}
+    pvd = paraview_collection(basename; append = append)
 
     mesh = get_mesh(domain)
     sdim = spacedim(mesh)
@@ -76,10 +76,15 @@ function write_vtk_bnd_discontinuous(
     a = map(bndfaces) do iface
         icell = f2c[iface][1]
         sideᵢ = Bcube.cell_side(celltypes[icell], c2n[icell], f2n[iface])
-        localfacedofs = Bcube.idof_by_face_with_bounds(fs, shape(celltypes[icell]))[sideᵢ]
+        localfacedofs =
+            Bcube.idof_by_face_with_bounds(fs, shape(celltypes[icell]))[sideᵢ]
         ξ = get_coords(fs, shape(celltypes[icell]))[localfacedofs]
-        xdofs = map(_ξ -> Bcube.mapping(celltypes[icell], get_nodes(mesh, c2n[icell]), _ξ), ξ)
-        ftype = Bcube.entity(Bcube.face_shapes(shape(celltypes[icell]), sideᵢ), Val(degree))
+        xdofs = map(
+            _ξ -> Bcube.mapping(celltypes[icell], get_nodes(mesh, c2n[icell]), _ξ),
+            ξ,
+        )
+        ftype =
+            Bcube.entity(Bcube.face_shapes(shape(celltypes[icell]), sideᵢ), Val(degree))
         ftype, Bcube.rawcat(xdofs)
     end
     ftypes = getindex.(a, 1)
@@ -90,7 +95,7 @@ function write_vtk_bnd_discontinuous(
     count = 0
     for ftype in ftypes
         _nnode = get_ndofs(fs, shape(ftype))
-        push!(vtkcells, MeshCell(vtk_entity(ftype), collect((count+1):(count+_nnode))))
+        push!(vtkcells, MeshCell(vtk_entity(ftype), collect((count + 1):(count + _nnode))))
         count += _nnode
     end
 
@@ -118,9 +123,9 @@ write_vtk("output", basic_mesh())
 """
 function write_vtk(
     basename::String,
-    mesh::AbstractMesh{topoDim,spaceDim},
-) where {topoDim,spaceDim}
-    dict_vars = Dict{String,Tuple{Any,WriteVTK.AbstractFieldData}}()
+    mesh::AbstractMesh{topoDim, spaceDim},
+) where {topoDim, spaceDim}
+    dict_vars = Dict{String, Tuple{Any, WriteVTK.AbstractFieldData}}()
     write_vtk(basename, 1, 0.0, mesh, dict_vars)
 end
 
@@ -206,7 +211,7 @@ end
 """
 Bcube node numbering -> VTK node numbering (in a cell)
 """
-function _vtk_lagrange_node_index_bcube_to_vtk(shape::Union{Square,Cube}, degree)
+function _vtk_lagrange_node_index_bcube_to_vtk(shape::Union{Square, Cube}, degree)
     n = _get_num_nodes_per_dim(
         QuadratureRule(shape, Quadrature(QuadratureUniform(), Val(degree))),
     )
@@ -225,7 +230,7 @@ end
 """
 VTK node numbering (in a cell) -> Bcube node numbering
 """
-function _vtk_lagrange_node_index_vtk_to_bcube(shape::Union{Square,Cube}, degree)
+function _vtk_lagrange_node_index_vtk_to_bcube(shape::Union{Square, Cube}, degree)
     return invperm(_vtk_lagrange_node_index_bcube_to_vtk(shape, degree))
 end
 
@@ -236,7 +241,7 @@ end
 """
 Coordinates of the nodes in the VTK cell, ordered as expected by VTK.
 """
-function _vtk_coords_from_lagrange(shape::Union{Square,Cube}, degree)
+function _vtk_coords_from_lagrange(shape::Union{Square, Cube}, degree)
     fs = FunctionSpace(Lagrange(), degree)
     c = get_coords(fs, shape)
     index = _vtk_lagrange_node_index_vtk_to_bcube(shape, degree)
@@ -281,20 +286,20 @@ indicate if the node values should be discontinuous or not.
 """
 function write_vtk_lagrange(
     basename::String,
-    vars::Dict{String,F},
+    vars::Dict{String, F},
     mesh::AbstractMesh,
-    it::Integer=-1,
-    time::Real=0.0;
-    mesh_degree::Integer=1,
-    discontinuous::Bool=true,
-    functionSpaceType::AbstractFunctionSpaceType=Lagrange(),
-    collection_append::Bool=false,
+    it::Integer = -1,
+    time::Real = 0.0;
+    mesh_degree::Integer = 1,
+    discontinuous::Bool = true,
+    functionSpaceType::AbstractFunctionSpaceType = Lagrange(),
+    collection_append::Bool = false,
     vtk_kwargs...,
-) where {F<:AbstractLazy}
+) where {F <: AbstractLazy}
     U_export = TrialFESpace(
         FunctionSpace(functionSpaceType, mesh_degree),
         mesh;
-        isContinuous=!discontinuous,
+        isContinuous = !discontinuous,
     )
     write_vtk_lagrange(
         basename,
@@ -310,14 +315,14 @@ end
 
 function write_vtk_lagrange(
     basename::String,
-    vars::Dict{String,F},
+    vars::Dict{String, F},
     mesh::AbstractMesh,
     U_export::AbstractFESpace,
-    it::Integer=-1,
-    time::Real=0.0;
-    collection_append=false,
+    it::Integer = -1,
+    time::Real = 0.0;
+    collection_append = false,
     vtk_kwargs...,
-) where {F<:AbstractLazy}
+) where {F <: AbstractLazy}
     # FE space stuff
     fs_export = get_function_space(U_export)
     @assert get_type(fs_export) <: Lagrange "Only FunctionSpace of type Lagrange are supported for now"
@@ -401,7 +406,7 @@ function write_vtk_lagrange(
     end
 
     # Write VTK file
-    pvd = paraview_collection(basename; append=collection_append)
+    pvd = paraview_collection(basename; append = collection_append)
     new_name = _build_fname_with_iterations(basename, it)
     vtkfile = vtk_grid(new_name, coords_vtk, cells_vtk; vtk_kwargs...)
 
@@ -428,10 +433,10 @@ function Bcube.write_file(
     filepath::String,
     mesh::AbstractMesh,
     U_export::AbstractFESpace,
-    data=nothing,
-    it::Integer=-1,
-    time::Real=0.0;
-    collection_append=false,
+    data = nothing,
+    it::Integer = -1,
+    time::Real = 0.0;
+    collection_append = false,
     kwargs...,
 )
 

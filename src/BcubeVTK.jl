@@ -31,7 +31,8 @@ import Bcube:
     ReferenceDomain,
     PhysicalDomain,
     change_domain,
-    cells
+    cells,
+    Node_t
 
 include("common.jl")
 include("write.jl")

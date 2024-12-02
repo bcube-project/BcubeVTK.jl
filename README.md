@@ -4,7 +4,7 @@ Implementation of [`Bcube`](https://github.com/bcube-project/Bcube.jl) IO interf
 For now, only the `write_file` interface is implemented.
 
 ## Basic usage
-```julia-repl
+```julia
 using Bcube
 using BcubeVTK
 

@@ -422,6 +422,161 @@ function write_vtk_lagrange(
 end
 
 """
+Filepath must end by "pvd"
+
+For now, only discontinuous export are supported, otherwise we need a "global" numbering of the each face domain.
+"""
+function write_vtk_lagrange_bnd(
+    filepath::String,
+    domains,
+    data::Dict{String, F},
+    U_export::AbstractFESpace,
+    it::Integer = 0,
+    time::Real = 0.0;
+    collection_append = false,
+) where {F <: AbstractLazy}
+    @assert all(domain -> domain isa Bcube.BoundaryFaceDomain, domains)
+
+    # FE space stuff
+    @assert Bcube.is_discontinuous(U_export) "Only discontinuous FESpaces are supported"
+    fs_export = get_function_space(U_export)
+    @assert get_type(fs_export) <: Lagrange "Only FunctionSpace of type Lagrange are supported for now"
+    degree_export = get_degree(fs_export)
+    (degree_export ≠ 1) &&
+        @warn "Use of `write_vtk_bnd` with degree different from 1 is highly discouraged, the result might be wrong"
+
+    # extract all `MeshCellData` in `vars` as this type of variable
+    # will not be interpolated to nodes and will be written with
+    # the `VTKCellData` attribute.
+    vars_cell = filter(((k, v),) -> v isa MeshData{<:CellData}, data)
+    vars_point = filter(((k, v),) -> k ∉ keys(vars_cell), data)
+
+    # Alias
+    mesh = get_mesh(first(domains))
+
+    # Remove extension from filename
+    basename = first(splitext(filepath))
+
+    # Create multiblock file
+    new_name = _build_fname_with_iterations(basename, it)
+    vtm = vtk_multiblock(new_name)
+
+    # Should use a function for the content of this for loop
+    for domain in domains
+        x = map(DomainIterator(domain)) do finfo
+            # Face infos
+            ftype = Bcube.get_element_type(finfo)
+            fshape = shape(ftype)
+            kside = Bcube.get_cell_side_n(finfo)
+            ftype_export = Bcube.entity(fshape, Val(degree_export))
+            b2v = _vtk_lagrange_node_index_bcube_to_vtk(shape(ftype_export), degree_export)
+
+            # Related cell infos
+            cinfo = side_n(finfo)
+            ctype = Bcube.get_element_type(cinfo)
+            cshape = shape(ctype)
+            cnodes = Bcube.nodes(cinfo)
+
+            # Compute dofs location
+            idofs_on_face = Bcube.idof_by_face_with_bounds(fs_export, cshape)[kside]
+            idofs_on_face = idofs_on_face[b2v] # reorder in vtk numbering
+            ξdofs_on_face = get_coords(fs_export, cshape)[idofs_on_face] # in the cell-reference system
+            xdofs_on_face = map(_ξ -> Bcube.mapping(ctype, cnodes, _ξ), ξdofs_on_face)
+            cpoints_on_face =
+                map(ξ -> CellPoint(ξ, cinfo, Bcube.ReferenceDomain()), ξdofs_on_face)
+
+            # Compute values with MeshCellData
+            ξcell_center = Bcube.center(ctype, cnodes)
+            cpoint_center = CellPoint(ξcell_center, cinfo, Bcube.ReferenceDomain())
+            vars_cell_cinfo =
+                map(Base.Fix2(Bcube.materialize, cinfo), values(vars_cell))
+            vars_point_cinfo =
+                map(Base.Fix2(Bcube.materialize, cinfo), values(vars_point))
+
+            # Rq: I use `ntuple` instead of `map` to avoid producing AbstractVector,
+            # but maybe this is useless
+            _values_cell = ntuple(
+                i -> begin
+                    a = Bcube.materialize(vars_cell_cinfo[i], cpoint_center)
+                    hcat(a...)
+                end,
+                length(vars_cell_cinfo),
+            )
+            _values_dofs = ntuple(
+                i -> begin
+                    a = map(Base.Fix1(Bcube.materialize, vars_point_cinfo[i]), cpoints_on_face)
+                    hcat(a...)
+                end,
+                length(vars_point_cinfo),
+            )
+            # _values_cell = map(vars_cell_cinfo) do f
+            #     a = Bcube.materialize(f, cpoint_center)
+            #     @show a
+            #     return vcat(a...)
+            # end
+            # _values_dofs = map(vars_point_cinfo) do f
+            #     a = map(Base.Fix1(Bcube.materialize, f), cpoints_on_face)
+            #     @show a
+            #     # return Bcube.rawcat(a)
+            #     return vcat(a...)
+            # end
+
+            return idofs_on_face,
+            ftype_export,
+            Bcube.rawcat(xdofs_on_face),
+            _values_cell,
+            _values_dofs
+        end
+
+        # "Unpack"
+        idofs_on_faces = vcat(getindex.(x, 1)...)
+        ftypes = getindex.(x, 2)
+        vtknodes = reshape(Bcube.rawcat(getindex.(x, 3)), spacedim(mesh), :)
+        values_center = vcat(getindex.(x, 4)...)
+        values_dofs = vcat(getindex.(x, 5)...)
+        values_center =
+            ntuple(i -> Array(hcat(getindex.(getindex.(x, 4), i)...)), length(vars_cell))
+        values_dofs =
+            ntuple(i -> Array(hcat(getindex.(getindex.(x, 5), i)...)), length(vars_point))
+
+        # Create elements array
+        vtkcells = MeshCell[]
+        sizehint!(vtkcells, length(ftypes))
+        count = 0
+        for ftype in ftypes
+            _nnode = get_ndofs(fs_export, shape(ftype))
+            push!(
+                vtkcells,
+                MeshCell(vtk_entity(ftype), collect((count + 1):(count + _nnode))),
+            )
+            count += _nnode
+        end
+
+        # Define mesh for vtk
+        name = join(domain.labels, "+")
+        block = multiblock_add_block(vtm, name)
+        vtkfile = vtk_grid(
+            block,
+            _build_fname_with_iterations("$(basename)_$(name)", it),
+            vtknodes,
+            vtkcells,
+        )
+
+        for (varname, value) in zip(keys(vars_cell), values_center)
+            vtkfile[varname, VTKCellData()] = value
+        end
+        for (varname, value) in zip(keys(vars_point), values(values_dofs))
+            vtkfile[varname, VTKPointData()] = value
+        end
+    end
+
+    # Build pvd
+    pvd = paraview_collection(basename; append = collection_append)
+    pvd[float(time)] = vtm
+    vtk_save(pvd)
+end
+
+"""
 Append the number of iteration (if positive) to the basename
 """
 function _build_fname_with_iterations(basename::String, it::Integer)

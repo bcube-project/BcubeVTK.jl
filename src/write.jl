@@ -482,16 +482,18 @@ function write_vtk_lagrange_bnd(
             idofs_on_face = idofs_on_face[b2v] # reorder in vtk numbering
             ξdofs_on_face = get_coords(fs_export, cshape)[idofs_on_face] # in the cell-reference system
             xdofs_on_face = map(_ξ -> Bcube.mapping(ctype, cnodes, _ξ), ξdofs_on_face)
-            cpoints_on_face =
-                map(ξ -> CellPoint(ξ, cinfo, Bcube.ReferenceDomain()), ξdofs_on_face)
+            fpoints_on_face = map(
+                ξ -> Bcube.FacePoint(ξ, finfo, Bcube.ReferenceDomain()),
+                ξdofs_on_face,
+            )
 
             # Compute values with MeshCellData
             ξcell_center = Bcube.center(ctype, cnodes)
             cpoint_center = CellPoint(ξcell_center, cinfo, Bcube.ReferenceDomain())
             vars_cell_cinfo =
                 map(Base.Fix2(Bcube.materialize, cinfo), values(vars_cell))
-            vars_point_cinfo =
-                map(Base.Fix2(Bcube.materialize, cinfo), values(vars_point))
+            vars_point_finfo =
+                map(Base.Fix2(Bcube.materialize, finfo), values(vars_point))
 
             # Rq: I use `ntuple` instead of `map` to avoid producing AbstractVector,
             # but maybe this is useless
@@ -504,40 +506,22 @@ function write_vtk_lagrange_bnd(
             )
             _values_dofs = ntuple(
                 i -> begin
-                    a = map(Base.Fix1(Bcube.materialize, vars_point_cinfo[i]), cpoints_on_face)
+                    a = map(Base.Fix1(Bcube.materialize, vars_point_finfo[i]), fpoints_on_face)
                     hcat(a...)
                 end,
-                length(vars_point_cinfo),
+                length(vars_point_finfo),
             )
-            # _values_cell = map(vars_cell_cinfo) do f
-            #     a = Bcube.materialize(f, cpoint_center)
-            #     @show a
-            #     return vcat(a...)
-            # end
-            # _values_dofs = map(vars_point_cinfo) do f
-            #     a = map(Base.Fix1(Bcube.materialize, f), cpoints_on_face)
-            #     @show a
-            #     # return Bcube.rawcat(a)
-            #     return vcat(a...)
-            # end
 
-            return idofs_on_face,
-            ftype_export,
-            Bcube.rawcat(xdofs_on_face),
-            _values_cell,
-            _values_dofs
+            return ftype_export, Bcube.rawcat(xdofs_on_face), _values_cell, _values_dofs
         end
 
         # "Unpack"
-        idofs_on_faces = vcat(getindex.(x, 1)...)
-        ftypes = getindex.(x, 2)
-        vtknodes = reshape(Bcube.rawcat(getindex.(x, 3)), spacedim(mesh), :)
-        values_center = vcat(getindex.(x, 4)...)
-        values_dofs = vcat(getindex.(x, 5)...)
+        ftypes = getindex.(x, 1)
+        vtknodes = reshape(Bcube.rawcat(getindex.(x, 2)), spacedim(mesh), :)
         values_center =
-            ntuple(i -> Array(hcat(getindex.(getindex.(x, 4), i)...)), length(vars_cell))
+            ntuple(i -> Array(hcat(getindex.(getindex.(x, 3), i)...)), length(vars_cell))
         values_dofs =
-            ntuple(i -> Array(hcat(getindex.(getindex.(x, 5), i)...)), length(vars_point))
+            ntuple(i -> Array(hcat(getindex.(getindex.(x, 4), i)...)), length(vars_point))
 
         # Create elements array
         vtkcells = MeshCell[]

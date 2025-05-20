@@ -163,6 +163,7 @@ vtk_entity(::Bcube.Pyra5_t) = VTKCellTypes.VTK_PYRAMID
 vtk_entity(::Line, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_CURVE
 vtk_entity(::Square, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_QUADRILATERAL
 vtk_entity(::Triangle, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_TRIANGLE
+vtk_entity(::Cube, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_HEXAHEDRON
 
 get_vtk_name(c::VTKCellType) = Val(Symbol(c.vtk_name))
 const VTK_LAGRANGE_QUADRILATERAL = get_vtk_name(VTKCellTypes.VTK_LAGRANGE_QUADRILATERAL)
@@ -177,8 +178,14 @@ function _point_index_from_IJK(t::Val{:VTK_LAGRANGE_QUADRILATERAL}, degree, i, j
     1 + _point_index_from_IJK_0based(t, degree, i - 1, j - 1)
 end
 
-# see : https://github.com/Kitware/VTK/blob/675adbc0feeb3f62730ecacb2af87917af124543/Filters/Sources/vtkCellTypeSource.cxx
-#        https://github.com/Kitware/VTK/blob/265ca48a79a36538c95622c237da11133608bbe5/Common/DataModel/vtkLagrangeQuadrilateral.cxx#L558
+function _point_index_from_IJK(t::Val{:VTK_LAGRANGE_HEXAHEDRON}, degree, i, j, k)
+    1 + _point_index_from_IJK_0based(t, degree, i - 1, j - 1, k - 1)
+end
+
+"""
+see : https://github.com/Kitware/VTK/blob/675adbc0feeb3f62730ecacb2af87917af124543/Filters/Sources/vtkCellTypeSource.cxx
+      https://github.com/Kitware/VTK/blob/265ca48a79a36538c95622c237da11133608bbe5/Common/DataModel/vtkLagrangeQuadrilateral.cxx#L558
+"""
 function _point_index_from_IJK_0based(::Val{:VTK_LAGRANGE_QUADRILATERAL}, degree, i, j)
     # 0-based algo
     ni = degree
@@ -202,6 +209,78 @@ function _point_index_from_IJK_0based(::Val{:VTK_LAGRANGE_QUADRILATERAL}, degree
     offset = offset + 2 * (degree - 1 + degree - 1)
     # Face DOF
     return (offset + (i - 1) + (degree - 1) * (j - 1))
+end
+
+"""
+https://github.com/Kitware/VTK/blob/265ca48a79a36538c95622c237da11133608bbe5/Common/DataModel/vtkLagrangeHexahedron.cxx#L724
+"""
+function _point_index_from_IJK_0based(::Val{:VTK_LAGRANGE_HEXAHEDRON}, degree, i, j, k)
+    # 0-based algo
+    ni = degree
+    nj = degree
+    nk = degree
+    ibnd = ((i == 0) || (i == ni))
+    jbnd = ((j == 0) || (j == nj))
+    kbnd = ((k == 0) || (k == nk))
+    # How many boundaries do we lie on at once?
+    nbnd = (ibnd > 0 ? 1 : 0) + (jbnd > 0 ? 1 : 0) + (kbnd > 0 ? 1 : 0)
+
+    if nbnd == 3 # Vertex DOF
+        # // ijk is a corner node. Return the proper index (somewhere in [0,7]):
+        return (i > 0 ? (j > 0 ? 2 : 1) : (j > 0 ? 3 : 0)) + (k > 0 ? 4 : 0)
+    end
+
+    offset = 8
+    if nbnd == 2 # Edge DOF
+        if ibnd == 0 # On i axis
+            return (i - 1) +
+                   (j > 0 ? degree - 1 + degree - 1 : 0) +
+                   (k > 0 ? 2 * (degree - 1 + degree - 1) : 0) +
+                   offset
+        end
+
+        if jbnd == 0 # On j axis
+            return (j - 1) +
+                   (i > 0 ? degree - 1 : 2 * (degree - 1) + degree - 1) +
+                   (k > 0 ? 2 * (degree - 1 + degree - 1) : 0) +
+                   offset
+        end
+        # kbnd == 0, On k axis
+        offset += 4 * (degree - 1) + 4 * (degree - 1)
+        return (k - 1) + (degree - 1) * (i > 0 ? (j > 0 ? 3 : 1) : (j > 0 ? 2 : 0)) + offset
+    end
+
+    offset += 4 * (degree - 1 + degree - 1 + degree - 1)
+    if nbnd == 1 # Face DOF
+        if (ibdy != 0) # On i-normal face
+            return (j - 1) +
+                   ((degree - 1) * (k - 1)) +
+                   (i > 0 ? (degree - 1) * (degree - 1) : 0) +
+                   offset
+        end
+        offset += 2 * (degree - 1) * (degree - 1)
+        if (jbnd != 0)  # On j-normal face
+            return (i - 1) +
+                   ((degree - 1) * (k - 1)) +
+                   (j > 0 ? (degree - 1) * (degree - 1) : 0) +
+                   offset
+        end
+        offset += 2 * (degree - 1) * (degree - 1)
+        # kbnd != 0, On k-normal face
+        return (i - 1) +
+               ((degree - 1) * (j - 1)) +
+               (k > 0 ? (degree - 1) * (degree - 1) : 0) +
+               offset
+    end
+
+    # nbnd == 0: Body DOF
+    offset +=
+        2 * (
+            (degree - 1) * (degree - 1) +
+            (degree - 1) * (degree - 1) +
+            (degree - 1) * (degree - 1)
+        )
+    return offset + (i - 1) + (degree - 1) * ((j - 1) + (degree - 1) * ((k - 1)))
 end
 
 function _vtk_lagrange_node_index_vtk_to_bcube(shape::AbstractShape, degree)

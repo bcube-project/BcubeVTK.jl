@@ -15,3 +15,7 @@ projection_l2!(u, PhysicalFunction(x -> sum(x)), CellDomain(mesh))
 
 write_file("output.pvd", mesh, Dict("u" => u, "grad_u" => ∇(u)))
 ```
+
+## Limitations
+
+* The `write_file` has not been tested for hexahedral elements of order > 1

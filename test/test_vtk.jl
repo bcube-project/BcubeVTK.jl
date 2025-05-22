@@ -80,4 +80,16 @@
         fname = basename * ".vtu"
         @test fname2sum[fname] == bytes2hex(open(sha1, joinpath(tempdir, fname)))
     end
+
+    @testset "write_file hexa" begin
+        mesh = one_cell_mesh(:hexa)
+        U = TrialFESpace(FunctionSpace(:Lagrange, 1), mesh)
+        u = FEFunction(U, collect(1:nnodes(mesh)))
+        basename = "write_vtk_lagrange_hexa_deg1.vtu"
+        write_file(joinpath(tempdir, basename), mesh, Dict("u" => u); vtkversion = v"1.0")
+
+        # Check
+        fname = basename
+        @test fname2sum[fname] == bytes2hex(open(sha1, joinpath(tempdir, fname)))
+    end
 end

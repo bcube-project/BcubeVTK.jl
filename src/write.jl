@@ -533,6 +533,23 @@ function Bcube.write_file(
     if valtype(data) <: Dict
         _keys = map(d -> collect(keys(d)), values(data))
         _keys = vcat(_keys...)
+
+        # Check for duplicates (same var name in different flow solutions)
+        # If duplicates are found, we prepend the FlowSolution name
+        if length(_keys) > length(unique(_keys))
+            i = 1
+            fSolNames = [fill(fSol, length(d)) for (fSol, d) in data]
+            fSolNames = vcat(fSolNames...)
+            for (i, varname) in enumerate(_keys)
+                (i == 1) && continue
+                ind = findfirst(==(varname), _keys[1:(i - 1)])
+                if !isnothing(ind)
+                    _keys[ind] = fSolNames[ind] * "_" * varname
+                    _keys[i] = fSolNames[i] * "_" * varname
+                end
+            end
+        end
+
         _values = map(d -> collect(values(d)), values(data))
         _values = vcat(_values...)
         _data = Dict(_keys .=> _values)

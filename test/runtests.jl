@@ -3,7 +3,7 @@ using BcubeVTK
 using DelimitedFiles
 using Bcube
 using StaticArrays
-import BcubeVTK: write_vtk, write_vtk_lagrange
+using BcubeVTK: write_vtk, write_vtk_lagrange, read_file, write_file
 using WriteVTK # TODO : get rid of it
 using SHA
 

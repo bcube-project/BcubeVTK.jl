@@ -19,6 +19,7 @@ end
 
 # This dir will be removed at the end of the tests
 tempdir = mktempdir()
+@show tempdir
 
 # Reading sha1 checksums
 f = readdlm(joinpath(@__DIR__, "checksums.sha1"), String)

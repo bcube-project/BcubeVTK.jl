@@ -92,4 +92,26 @@
         fname = basename
         @test fname2sum[fname] == bytes2hex(open(sha1, joinpath(tempdir, fname)))
     end
+
+    @testset "misc" begin
+        mesh = one_cell_mesh(:line)
+        f = PhysicalFunction(x -> 1.0)
+        d = Dict(
+            "Gas" => Dict("Temperature" => f, "u" => f),
+            "Droplet" => Dict("v" => f, "Temperature" => f),
+        )
+        basename = "write_vtk_dict_of_dict.vtu"
+        write_file(joinpath(tempdir, basename), mesh, d; vtkversion = v"1.0")
+
+        # Check
+        fname = basename
+        @test fname2sum[fname] == bytes2hex(open(sha1, joinpath(tempdir, fname)))
+        # Reading VTK is not supported for now
+        # result = read_file(tmppath)
+        # @assert "Gas_Temperature" ∈ keys(result.d)
+        # @assert "Droplet_Temperature" ∈ keys(result.d)
+        # @assert "Temperature" ∉ keys(result.d)
+        # @assert "u" ∈ keys(result.d)
+        # @assert "v" ∈ keys(result.d)
+    end
 end

@@ -164,6 +164,7 @@ vtk_entity(::Line, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_CUR
 vtk_entity(::Square, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_QUADRILATERAL
 vtk_entity(::Triangle, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_TRIANGLE
 vtk_entity(::Cube, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_HEXAHEDRON
+vtk_entity(::Prism, ::Val{1}) where {1} = VTKCellTypes.VTK_WEDGE
 
 get_vtk_name(c::VTKCellType) = Val(Symbol(c.vtk_name))
 const VTK_LAGRANGE_QUADRILATERAL = get_vtk_name(VTKCellTypes.VTK_LAGRANGE_QUADRILATERAL)

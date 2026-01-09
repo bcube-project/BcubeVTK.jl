@@ -14,6 +14,7 @@ import Bcube:
     Square,
     Triangle,
     Cube,
+    Tetra,
     Prism,
     connectivities_indices,
     get_function_space,

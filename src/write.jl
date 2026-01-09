@@ -164,6 +164,7 @@ vtk_entity(::Line, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_CUR
 vtk_entity(::Square, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_QUADRILATERAL
 vtk_entity(::Triangle, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_TRIANGLE
 vtk_entity(::Cube, ::Val{Degree}) where {Degree} = VTKCellTypes.VTK_LAGRANGE_HEXAHEDRON
+vtk_entity(::Tetra, ::Val{1}) = VTKCellTypes.VTK_LAGRANGE_TETRAHEDRON # numbering not validated/implemented for degree > 1
 vtk_entity(::Prism, ::Val{1}) = VTKCellTypes.VTK_WEDGE
 
 get_vtk_name(c::VTKCellType) = Val(Symbol(c.vtk_name))

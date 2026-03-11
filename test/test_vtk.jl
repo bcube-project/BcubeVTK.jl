@@ -24,7 +24,7 @@
     end
 
     @testset "write_vtk_lagrange" begin
-        mesh = rectangle_mesh(6, 7; xmin = -1, xmax = 1.0, ymin = -1, ymax = 1.0)
+        mesh = rectangle_mesh(6, 7; xmin = -1.0, xmax = 1.0, ymin = -1.0, ymax = 1.0)
         u = FEFunction(TrialFESpace(FunctionSpace(:Lagrange, 4), mesh))
         projection_l2!(u, PhysicalFunction(x -> x[1]^2 + x[2]^2), mesh)
 

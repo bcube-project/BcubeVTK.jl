@@ -12,13 +12,22 @@
             Dict(
                 "u" => (val_sca, WriteVTK.VTKPointData()),
                 "v" => (transpose(val_vec), WriteVTK.VTKPointData()),
-            ),
+            );
+            ascii = false,
+            compress = false,
+            append = false,
         )
         fname = BcubeVTK._build_fname_with_iterations(basename, 1) * ".vtu"
         @test fname2sum[fname] == bytes2hex(open(sha1, joinpath(tempdir, fname)))
 
         basename = "write_vtk_mesh"
-        write_vtk(joinpath(tempdir, basename), basic_mesh())
+        write_vtk(
+            joinpath(tempdir, basename),
+            basic_mesh();
+            ascii = false,
+            compress = false,
+            append = false,
+        )
         fname = BcubeVTK._build_fname_with_iterations(basename, 1) * ".vtu"
         @test fname2sum[fname] == bytes2hex(open(sha1, joinpath(tempdir, fname)))
     end
@@ -41,6 +50,9 @@
                 mesh_degree,
                 discontinuous = false,
                 vtkversion = v"1.0",
+                ascii = false,
+                compress = false,
+                append = false,
             )
 
             # Check
@@ -60,6 +72,9 @@
             mesh_degree = 4,
             discontinuous = false,
             vtkversion = v"1.0",
+            ascii = false,
+            compress = false,
+            append = false,
         )
 
         # Check
@@ -74,6 +89,9 @@
             mesh_degree = 4,
             discontinuous = true,
             vtkversion = v"1.0",
+            ascii = false,
+            compress = false,
+            append = false,
         )
 
         # Check
@@ -86,7 +104,15 @@
         U = TrialFESpace(FunctionSpace(:Lagrange, 1), mesh)
         u = FEFunction(U, collect(1:nnodes(mesh)))
         basename = "write_vtk_lagrange_hexa_deg1.vtu"
-        write_file(joinpath(tempdir, basename), mesh, Dict("u" => u); vtkversion = v"1.0")
+        write_file(
+            joinpath(tempdir, basename),
+            mesh,
+            Dict("u" => u);
+            vtkversion = v"1.0",
+            ascii = false,
+            compress = false,
+            append = false,
+        )
 
         # Check
         fname = basename
@@ -98,7 +124,15 @@
         U = TrialFESpace(FunctionSpace(:Lagrange, 1), mesh)
         u = FEFunction(U, collect(1:nnodes(mesh)))
         basename = "write_vtk_lagrange_tetra_deg1.vtu"
-        write_file(joinpath(tempdir, basename), mesh, Dict("u" => u); vtkversion = v"1.0")
+        write_file(
+            joinpath(tempdir, basename),
+            mesh,
+            Dict("u" => u);
+            vtkversion = v"1.0",
+            ascii = false,
+            compress = false,
+            append = false,
+        )
 
         # Check
         fname = basename
@@ -113,7 +147,15 @@
             "Droplet" => Dict("v" => f, "Temperature" => f),
         )
         basename = "write_vtk_dict_of_dict.vtu"
-        write_file(joinpath(tempdir, basename), mesh, d; vtkversion = v"1.0")
+        write_file(
+            joinpath(tempdir, basename),
+            mesh,
+            d;
+            vtkversion = v"1.0",
+            ascii = false,
+            compress = false,
+            append = false,
+        )
 
         # Check
         fname = basename

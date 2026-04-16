@@ -71,8 +71,8 @@ jobs:
             fi
           fi
           if [[ -n "$SELECTED_BRANCH" ]]; then
-            echo "Using custom Bcube branch $BCUBE_BRANCH"
-            echo "bcube_branch=$BCUBE_BRANCH" >> $GITHUB_OUTPUT
+            echo "Using custom Bcube branch '$SELECTED_BRANCH'"
+            echo "bcube_branch=$SELECTED_BRANCH" >> $GITHUB_OUTPUT
             echo "bcube_branch_detected=true" >> $GITHUB_OUTPUT
           else
             echo "Using registry version of Bcube (no custom branch)"

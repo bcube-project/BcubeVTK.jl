@@ -55,37 +55,28 @@ jobs:
       # Determine Bcube branch from workflow_dispatch input or commit message
       - name: Determine Bcube branch
         id: bcube_branch
+        if: github.event_name == 'pull_request'
+        shell: bash
         run: |
-          BRANCH=""
-
-          # Check workflow_dispatch input first
-          if [ -n "${{ github.event.inputs.bcube_branch }}" ]; then
-            BRANCH="${{ github.event.inputs.bcube_branch }}"
-            echo "Using Bcube branch from workflow_dispatch input: $BRANCH"
-          # Check commit message for /bcube-branche directive
-          elif [ "${{ github.event_name }}" = "push" ] && [ -n "${{ github.event.head_commit.message }}" ]; then
-            COMMIT_MSG="${{ github.event.head_commit.message }}"
-            if echo "$COMMIT_MSG" | grep -q "^/bcube-branche "; then
-              BRANCH=$(echo "$COMMIT_MSG" | grep "^/bcube-branche " | head -1 | sed 's/^\/bcube-branche //')
-              echo "Using Bcube branch from commit message: $BRANCH"
-            fi
-          # Check PR body for /bcube-branche directive
-          elif [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${{ github.event.pull_request.body }}" ]; then
-            PR_BODY="${{ github.event.pull_request.body }}"
-            if echo "$PR_BODY" | grep -q "^/bcube-branche "; then
-              BRANCH=$(echo "$PR_BODY" | grep "^/bcube-branche " | head -1 | sed 's/^\/bcube-branche //')
-              echo "Using Bcube branch from PR body: $BRANCH"
+          PR_BODY="${{ github.event.pull_request.body }}"
+          SELECTED_BRANCH=""
+          if [[ "$PR_BODY" =~ /bcube-branch[[:space:]]+([^[:space:]]+) ]]; then
+            SELECTED_BRANCH="${BASH_REMATCH[1]}"
+          fi
+          if [[ -z "$SELECTED_BRANCH" ]]; then
+            LAST_COMMIT_MSG="$(git log -1 --pretty=%B)"
+            if [[ "$LAST_COMMIT_MSG" =~ /bcube-branch[[:space:]]+([^[:space:]]+) ]]; then
+              SELECTED_BRANCH="${BASH_REMATCH[1]}"
             fi
           fi
-
-          if [ -n "$BRANCH" ]; then
-            echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          if [[ -n "$SELECTED_BRANCH" ]]; then
+            echo "Using custom Bcube branch $BCUBE_BRANCH"
+            echo "bcube_branch=$BCUBE_BRANCH" >> $GITHUB_OUTPUT
             echo "bcube_branch_detected=true" >> $GITHUB_OUTPUT
           else
             echo "Using registry version of Bcube (no custom branch)"
             echo "bcube_branch_detected=false" >> $GITHUB_OUTPUT
           fi
-
       # Install Bcube.jl from the specified branch if provided
       - name: Install Bcube.jl from branch
         if: steps.bcube_branch.outputs.bcube_branch_detected == 'true'
@@ -102,7 +93,7 @@ jobs:
             Pkg.add(url="https://github.com/bcube-project/Bcube.jl.git", rev=bcube_branch)
           '
         env:
-          BCUBE_BRANCH: ${{ steps.bcube_branch.outputs.branch }}
+          BCUBE_BRANCH: ${{ steps.bcube_branch.outputs.bcube_branch }}
 
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest

@@ -36,7 +36,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0  # Fetch all history for commit message parsing
+          lfs: "true"
+          ref: ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request && format('refs/pull/{0}/head', github.event.issue.number) || github.event_name == 'pull_request' && github.head_ref || github.ref }}
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.version }}

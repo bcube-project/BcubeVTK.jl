@@ -82,6 +82,7 @@ jobs:
             echo "branch=$BRANCH" >> $GITHUB_OUTPUT
             echo "bcube_branch_detected=true" >> $GITHUB_OUTPUT
           else
+            echo "Using registry version of Bcube (no custom branch)"
             echo "bcube_branch_detected=false" >> $GITHUB_OUTPUT
           fi
 

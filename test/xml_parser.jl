@@ -54,8 +54,10 @@ function parse_vtk_xml(filepath::AbstractString)
     cells_section = find_child_by_tag(piece, "Cells")
     names = ("connectivity", "offsets", "types")
     cells_dict = Dict(
-        name =>
-            parse.(Int, split(get_text_content(find_child_by_name(cells_section, name)))) for name in names
+        name => parse.(
+            Int,
+            split(get_text_content(find_child_by_name(cells_section, name))),
+        ) for name in names
     )
     result["Cells"] = cells_dict
 

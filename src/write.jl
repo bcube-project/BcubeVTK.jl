@@ -1,52 +1,3 @@
-"""
-    write_vtk(basename::String, it::Int,time::Real, mesh::AbstractMesh{topoDim,spaceDim}, vars::Dict{String,Tuple{V,L}}; append=false) where{topoDim,spaceDim,V,L<:WriteVTK.AbstractFieldData}
-
-Write a set of variables on the mesh nodes or cell centers to a VTK file.
-
-# Example
-```julia
-mesh = basic_mesh()
-u = rand(ncells(mesh))
-v = rand(nnodes(mesh))
-dict_vars = Dict( "u" => (u, VTKCellData()),  "v" => (v, VTKPointData()) )
-write_vtk("output", 0, 0.0, mesh, dict_vars)
-```
-"""
-function write_vtk(
-    basename::String,
-    it::Int,
-    time::Real,
-    mesh::AbstractMesh{topoDim, spaceDim},
-    vars::Dict{String, Tuple{V, L}};
-    append = false,
-) where {topoDim, spaceDim, V, L <: WriteVTK.AbstractFieldData}
-    pvd = paraview_collection(basename; append = append)
-
-    # Create coordinates arrays
-    vtknodes = reshape(
-        [get_coords(n)[idim] for n in get_nodes(mesh) for idim in 1:spaceDim],
-        spaceDim,
-        nnodes(mesh),
-    )
-
-    # Connectivity
-    c2n = connectivities_indices(mesh, :c2n)
-    # Create cell array
-    vtkcells =
-        [MeshCell(vtk_entity(cells(mesh)[icell]), c2n[icell]) for icell in 1:ncells(mesh)]
-
-    # Define mesh for vtk
-    new_name = _build_fname_with_iterations(basename, it)
-    vtkfile = vtk_grid(new_name, vtknodes, vtkcells)
-
-    for (varname, (value, loc)) in vars
-        vtkfile[varname, loc] = value
-    end
-
-    pvd[float(time)] = vtkfile
-    vtk_save(pvd) # also triggers `vtk_save(vtkfile)`
-end
-
 function write_vtk_bnd_discontinuous(
     basename::String,
     it::Int,
@@ -109,24 +60,6 @@ function write_vtk_bnd_discontinuous(
 
     pvd[float(time)] = vtkfile
     vtk_save(pvd)
-end
-
-"""
-    write_vtk(basename::String, mesh::AbstractMesh{topoDim,spaceDim}) where{topoDim,spaceDim}
-
-Write the mesh to a VTK file.
-
-# Example
-```julia
-write_vtk("output", basic_mesh())
-```
-"""
-function write_vtk(
-    basename::String,
-    mesh::AbstractMesh{topoDim, spaceDim},
-) where {topoDim, spaceDim}
-    dict_vars = Dict{String, Tuple{Any, WriteVTK.AbstractFieldData}}()
-    write_vtk(basename, 1, 0.0, mesh, dict_vars)
 end
 
 """
@@ -524,15 +457,10 @@ function Bcube.write_file(
     # Remove extension from filename
     basename = first(splitext(filepath))
 
-    # Just write the mesh if `data` is `nothing`
-    if isnothing(data)
-        write_vtk(basename, mesh)
-        return
-    end
+    _data = isnothing(data) ? Dict{String, Bcube.AbstractLazy}() : data
 
     # We don't use FlowSolution names in VTK, so we flatten everything
-    _data = data
-    if valtype(data) <: Dict
+    if valtype(_data) <: Dict
         _keys = map(d -> collect(keys(d)), values(data))
         _keys = vcat(_keys...)
 

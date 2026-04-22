@@ -6,6 +6,11 @@ on:
   pull_request:
     types: [unlabeled, opened, synchronize, reopened]
   workflow_dispatch:
+    inputs:
+      bcube_branch:
+        description: 'Bcube.jl branch to use for testing'
+        required: false
+        default: ''
 
 
 concurrency:
@@ -30,6 +35,9 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v6
+        with:
+          lfs: "true"
+          ref: ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request && format('refs/pull/{0}/head', github.event.issue.number) || github.event_name == 'pull_request' && github.head_ref || github.ref }}
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.version }}
@@ -44,11 +52,50 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-
+
+      # Determine Bcube branch from workflow_dispatch input or commit message
+      - name: Determine Bcube branch
+        id: bcube_branch
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+          SELECTED_BRANCH=""
+          if [[ "$PR_BODY" =~ /bcube-branch[[:space:]]+([^[:space:]]+) ]]; then
+            SELECTED_BRANCH="${BASH_REMATCH[1]}"
+          fi
+          if [[ -z "$SELECTED_BRANCH" ]]; then
+            LAST_COMMIT_MSG="$(git log -1 --pretty=%B)"
+            if [[ "$LAST_COMMIT_MSG" =~ /bcube-branch[[:space:]]+([^[:space:]]+) ]]; then
+              SELECTED_BRANCH="${BASH_REMATCH[1]}"
+            fi
+          fi
+          if [[ -n "$SELECTED_BRANCH" ]]; then
+            echo "Using custom Bcube branch '$SELECTED_BRANCH'"
+            echo "bcube_branch=$SELECTED_BRANCH" >> $GITHUB_OUTPUT
+            echo "bcube_branch_detected=true" >> $GITHUB_OUTPUT
+          else
+            echo "Using registry version of Bcube (no custom branch)"
+            echo "bcube_branch_detected=false" >> $GITHUB_OUTPUT
+          fi
+      # Install Bcube.jl from the specified branch if provided
+      - name: Install Bcube.jl from branch
+        if: steps.bcube_branch.outputs.bcube_branch_detected == 'true'
+        run: |
+          julia --project=. -e '
+            using Pkg
+            bcube_branch = ENV["BCUBE_BRANCH"]
+            println("Installing Bcube.jl from branch: ", bcube_branch)
+            Pkg.add(url="https://github.com/bcube-project/Bcube.jl.git", rev=bcube_branch)
+          '
+        env:
+          BCUBE_BRANCH: ${{ steps.bcube_branch.outputs.bcube_branch }}
+
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
       - uses: julia-actions/julia-processcoverage@latest
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:

@@ -273,6 +273,7 @@ end
         discontinuous::Bool = true,
         functionSpaceType::AbstractFunctionSpaceType = Lagrange(),
         collection_append::Bool = false,
+        pad_vectors_to_3d::Bool = true,
         vtk_kwargs...,
     ) where {F <: AbstractLazy}
 
@@ -284,6 +285,7 @@ end
         it::Integer = -1,
         time::Real = 0.0;
         collection_append::Bool = false,
+        pad_vectors_to_3d::Bool = true,
         vtk_kwargs...,
     ) where {F <: AbstractLazy}
 
@@ -292,6 +294,10 @@ defined by the `functionSpaceType` (only `Lagrange{:Uniform}` supported for now)
 indicate if the node values should be discontinuous or not.
 
 `vars` is a dictionnary of variable name => Union{FEFunction,MeshCellData,CellFunction} to write.
+
+When `pad_vectors_to_3d` is `true` (the default), 2D-vector fields are padded with a zeroed third
+component so that ParaView/VTK recognise them as vector fields (3 components) rather than as pairs
+of independent scalars.
 
 # Dev notes
 - in order to write an ASCII file, you must pass both `ascii = true` and `append = false`
@@ -308,6 +314,7 @@ function write_vtk_lagrange(
     discontinuous::Bool = true,
     functionSpaceType::AbstractFunctionSpaceType = Lagrange(),
     collection_append::Bool = false,
+    pad_vectors_to_3d::Bool = true,
     vtk_kwargs...,
 ) where {F <: AbstractLazy}
     U_export = TrialFESpace(
@@ -323,6 +330,7 @@ function write_vtk_lagrange(
         it,
         time;
         collection_append,
+        pad_vectors_to_3d,
         vtk_kwargs...,
     )
 end
@@ -334,7 +342,8 @@ function write_vtk_lagrange(
     U_export::AbstractFESpace,
     it::Integer = -1,
     time::Real = 0.0;
-    collection_append = false,
+    collection_append::Bool = false,
+    pad_vectors_to_3d::Bool = true,
     vtk_kwargs...,
 ) where {F <: AbstractLazy}
     # FE space stuff
@@ -359,10 +368,10 @@ function write_vtk_lagrange(
         vals = get_values(meshData)
 
         val = first(vals)
-        if length(val) == spadim == 2
+        if pad_vectors_to_3d && (length(val) == spadim == 2)
             # Append a 0. to each vector
             _vals = map(vals) do x
-                return SA[x..., 0.0]
+                return SA[x..., zero(eltype(x))]
             end
             return _vals
         else
@@ -380,18 +389,14 @@ function write_vtk_lagrange(
 
     # VTK stuff
     coords_vtk = zeros(spadim, nd)
-    # node_values_vtk = map(type_dim) do ((T, d),)
-    node_values_vtk = map(type_dim) do td
-        T = first(td)
-        dim = last(td)
-
+    node_values_vtk = map(type_dim) do (T, dim)
         # See the 2D-vector trick explained above for cell values
-        _d = dim
-        if (length(dim) == 1) && (first(dim) == spadim == 2)
-            _d = (3,)
+        d = if pad_vectors_to_3d && (length(dim) == 1) && (first(dim) == spadim == 2)
+            (3,)
+        else
+            dim
         end
-
-        return zeros(T, _d..., nd)
+        return zeros(T, d..., nd)
     end
     cells_vtk = MeshCell[]
     sizehint!(cells_vtk, ncells(mesh))

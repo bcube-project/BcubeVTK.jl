@@ -21,8 +21,8 @@ function parse_vtk_xml(filepath::AbstractString)
     # Structure: VTKFile -> UnstructuredGrid -> Piece
     # Skip XML declaration node (first child with tag=nothing)
     vtkfile = nothing
-    for child in doc.children
-        if child.tag == "VTKFile"
+    for child in children(doc)
+        if tag(child) == "VTKFile"
             vtkfile = child
             break
         end
@@ -63,14 +63,14 @@ function parse_vtk_xml(filepath::AbstractString)
 
     # Parse PointData
     point_data_section = find_child_by_tag(piece, "PointData")
-    if point_data_section !== nothing && !isempty(point_data_section.children)
+    if point_data_section !== nothing && !isempty(children(point_data_section))
         name_and_values = parse_data_section(point_data_section)
         result["PointData"] = Dict(name => array for (name, array) in name_and_values)
     end
 
     # Parse CellData if present
     cell_data_section = find_child_by_tag(piece, "CellData")
-    if cell_data_section !== nothing && !isempty(cell_data_section.children)
+    if cell_data_section !== nothing && !isempty(children(cell_data_section))
         name_and_values = parse_data_section(point_data_section)
         result["CellData"] = Dict(name => array for (name, array) in name_and_values)
     end
@@ -80,12 +80,12 @@ end
 
 # Helper function to get text content from a node
 function get_text_content(node)
-    if node.value !== nothing
-        return String(node.value)
+    if value(node) !== nothing
+        return String(value(node))
     end
     # If the node has children, get the text from the first child
-    if !isempty(node.children)
-        return String(node.children[1].value)
+    if !isempty(children(node))
+        return String(value(first(children(node))))
     end
     return ""
 end
@@ -101,8 +101,8 @@ end
 
 # Helper function to find child by tag name
 function find_child_by_tag(node, tag_name)
-    for child in node.children
-        if child.tag == tag_name
+    for child in children(node)
+        if tag(child) == tag_name
             return child
         end
     end
@@ -110,7 +110,7 @@ function find_child_by_tag(node, tag_name)
 end
 
 function find_child_by_name(node, name)
-    for child in node.children
+    for child in eachelement(node)
         if get_attr(child, "Name") == name
             return child
         end
@@ -119,7 +119,7 @@ function find_child_by_name(node, name)
 end
 
 function parse_data_section(data_section)
-    dArrays = filter(child -> child.tag == "DataArray", data_section.children)
+    dArrays = filter(child -> tag(child) == "DataArray", children(data_section))
     name_and_values = map(dArrays) do dArray
         name = get_attr(dArray, "Name")
         n_components = parse(Int, get_attr(dArray, "NumberOfComponents"))

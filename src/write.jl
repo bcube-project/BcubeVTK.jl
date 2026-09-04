@@ -343,6 +343,7 @@ function write_vtk_lagrange(
     degree_export = get_degree(fs_export)
     dhl_export = Bcube._get_dhl(U_export)
     nd = get_ndofs(dhl_export)
+    spadim = spacedim(mesh)
 
     # extract all `MeshCellData` in `vars` as this type of variable
     # will not be interpolated to nodes and will be written with
@@ -378,7 +379,6 @@ function write_vtk_lagrange(
     @assert all(((T, d),) -> length(d) == 1, type_dim) "Only scalar or vector fields supported for now"
 
     # VTK stuff
-    spadim = spacedim(mesh)
     coords_vtk = zeros(spadim, nd)
     # node_values_vtk = map(type_dim) do ((T, d),)
     node_values_vtk = map(type_dim) do td

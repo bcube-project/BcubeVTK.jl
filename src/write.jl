@@ -350,12 +350,49 @@ function write_vtk_lagrange(
     vars_cell = filter(((k, v),) -> v isa MeshData{<:CellData}, vars)
     vars_point = filter(((k, v),) -> k ∉ keys(vars_cell), vars)
 
-    # Get ncomps and type of each `point` variable
-    type_dim = map(var -> get_return_type_and_codim(var, mesh), values(vars_point))
+    # Build the cell values
+    # In (spacedim) 2D, VTK wants vectors to be written with 3 components to correctly identify them as vectors
+    # Here, we check that the variable is a 2D-vector field and, if so, we append a dimension
+    # (that will only contains zeros)
+    cell_values_vtk = map(values(vars_cell)) do meshData
+        vals = get_values(meshData)
+
+        val = first(vals)
+        if length(val) == spadim == 2
+            # Append a 0. to each vector
+            _vals = map(vals) do x
+                return SA[x..., 0.0]
+            end
+            return _vals
+        else
+            return vals
+        end
+    end
+
+    # Get type and ncomps of each `point` variable
+    type_dim = map(lazyOp -> get_return_type_and_codim(lazyOp, mesh), values(vars_point))
+    types = first.(type_dim)
+    dims = last.(type_dim)
+
+    # Smoke test
+    @assert all(((T, d),) -> length(d) == 1, type_dim) "Only scalar or vector fields supported for now"
 
     # VTK stuff
-    coords_vtk = zeros(spacedim(mesh), nd)
-    values_vtk = map(((_t, _d),) -> zeros(_t, _d..., nd), type_dim)
+    spadim = spacedim(mesh)
+    coords_vtk = zeros(spadim, nd)
+    # node_values_vtk = map(type_dim) do ((T, d),)
+    node_values_vtk = map(type_dim) do td
+        T = first(td)
+        dim = last(td)
+
+        # See the 2D-vector trick explained above for cell values
+        _d = dim
+        if (length(dim) == 1) && (first(dim) == spadim == 2)
+            _d = (3,)
+        end
+
+        return zeros(T, _d..., nd)
+    end
     cells_vtk = MeshCell[]
     sizehint!(cells_vtk, ncells(mesh))
     nodeweigth_vtk = zeros(nd)
@@ -386,9 +423,14 @@ function write_vtk_lagrange(
             nodeweigth_vtk[iglob] += 1.0
 
             # Evaluate all vars on this node
-            for (ivar, var) in enumerate(values(vars_point))
+            for (values_vtk_var, var, dim) in zip(node_values_vtk, values(vars_point), dims)
                 _var = Bcube.materialize(var, cinfo)
-                values_vtk[ivar][:, iglob] .+= Bcube.materialize(_var, cpoint)
+                ncomp = first(dim) # only scalar or vectors supported for now
+
+                # because of the 2D-vectors trick, `values_vtk_var` may have an additionnal components
+                # compared to `Bcube.materialize(_var, cpoint)`, that's why we build a view.
+                y = view(values_vtk_var, 1:ncomp, iglob)
+                y .+= Bcube.materialize(_var, cpoint)
             end
         end
 
@@ -413,7 +455,7 @@ function write_vtk_lagrange(
     # - continous variables written as a continous fields
     #   because interpolated values are all equals and
     #   averaging gives the same value.
-    for val in values_vtk
+    for val in node_values_vtk
         for i in eachindex(nodeweigth_vtk)
             val[:, i] .= val[:, i] ./ nodeweigth_vtk[i]
         end
@@ -424,11 +466,11 @@ function write_vtk_lagrange(
     new_name = _build_fname_with_iterations(basename, it)
     vtkfile = vtk_grid(new_name, coords_vtk, cells_vtk; vtk_kwargs...)
 
-    for (varname, value) in zip(keys(vars_point), values_vtk)
+    for (varname, value) in zip(keys(vars_point), node_values_vtk)
         vtkfile[varname, VTKPointData()] = value
     end
-    for (varname, value) in zip(keys(vars_cell), values(vars_cell))
-        vtkfile[varname, VTKCellData()] = get_values(value)
+    for (varname, value) in zip(keys(vars_cell), cell_values_vtk)
+        vtkfile[varname, VTKCellData()] = value
     end
 
     pvd[float(time)] = vtkfile

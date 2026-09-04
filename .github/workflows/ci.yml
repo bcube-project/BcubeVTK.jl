@@ -58,8 +58,9 @@ jobs:
         id: bcube_branch
         if: github.event_name == 'pull_request'
         shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          PR_BODY="${{ github.event.pull_request.body }}"
           SELECTED_BRANCH=""
           if [[ "$PR_BODY" =~ /bcube-branch[[:space:]]+([^[:space:]]+) ]]; then
             SELECTED_BRANCH="${BASH_REMATCH[1]}"

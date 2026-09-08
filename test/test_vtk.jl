@@ -3,11 +3,12 @@
         mesh = rectangle_mesh(10, 10; xmax = 2π, ymax = 2π)
         val_sca = PhysicalFunction(x -> cos(x[1]) * sin(x[2]))
         val_vec = PhysicalFunction(x -> SA[cos(x[1]), sin(x[2])])
+        meshdata = MeshCellData(Bcube.get_cell_centers(mesh))
         basename = "write_vtk_rectangle"
         write_file(
             joinpath(tempdir, basename * ".pvd"),
             mesh,
-            Dict("u" => val_sca, "v" => val_vec),
+            Dict("u" => val_sca, "v" => val_vec, "meshdata" => meshdata),
             1,
             0.0;
             ascii = true,

@@ -21,7 +21,8 @@ function custom_include(path)
 end
 
 # This dir will be removed at the end of the tests
-tempdir = mktempdir()
+tempdir = joinpath(@__DIR__, "..", "tmp")
+# tempdir = mktempdir()
 @show tempdir
 
 @testset "BcubeVTK.jl" begin

@@ -371,7 +371,7 @@ function write_vtk_lagrange(
         if pad_vectors_to_3d && (length(val) == spadim == 2)
             # Append a 0. to each vector
             _vals = map(vals) do x
-                return SA[x..., zero(eltype(x))]
+                return [x; zero(eltype(x))] # if `x` is a StaticArray, the result will also be a SA
             end
             return _vals
         else

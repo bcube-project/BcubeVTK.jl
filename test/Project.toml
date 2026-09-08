@@ -6,3 +6,6 @@ SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 XML = "72c71f33-b9b6-44de-8c94-c961784809e2"
+
+[compat]
+XML = "0.4"
